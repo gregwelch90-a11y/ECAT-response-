@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- CRUCIAL: This meta tag helps resolve CORS/Referer issues on static hosts like GitHub Pages -->
     <meta name="referrer" content="no-referrer-when-downgrade">
     <title>ECAT Blue Light Response Checker</title>
     <!-- Load Tailwind CSS -->
@@ -159,11 +160,11 @@
             statusMessage.className = 'text-center text-gray-500 italic'; // Reset status style for loading
 
             try {
-                // 2. Construct API URL. 'mode: cors' is necessary for browser security in GitHub Pages.
+                // 2. Construct API URL. 
                 const apiUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${postcode},UK&destinations=${DESTINATION}&key=${API_KEY}&mode=driving&departure_time=now&traffic_model=best_guess&units=metric`;
                 
-                // 3. Fetch Data with explicit CORS mode
-                const response = await fetch(apiUrl, { mode: 'cors' });
+                // 3. Fetch Data. Removed the explicit '{ mode: "cors" }' setting to resolve GitHub Pages connection failure.
+                const response = await fetch(apiUrl);
 
                 if (!response.ok) {
                     throw new Error(`Network error: HTTP status ${response.status}`);
