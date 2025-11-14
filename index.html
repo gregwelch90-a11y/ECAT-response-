@@ -97,7 +97,7 @@
 
     <script>
         // --- Configuration and Constants ---
-        // !!! IMPORTANT: REPLACE THIS PLACEHOLDER WITH YOUR NEW, UNRESTRICTED API KEY !!!
+        // *** This is the new, unique key provided by the user ***
         const API_KEY = "AIzaSyA-HPemyZUKc42MBLUbVD0JGuqffBpei94"; 
         const DESTINATION = "Whitechapel Road, London E1 1BB, UK";
         const MAX_EMERGENCY_MINUTES = 25;
@@ -172,8 +172,8 @@
 
                 // 2. Handle Top-Level API Errors
                 if (data.status === 'REQUEST_DENIED') {
-                    // This error is now the *most likely* error if the app still fails after key insertion.
-                    displayResult(`API Error: REQUEST DENIED. This usually means the API key is restricted to the wrong domain or the Distance Matrix API is not enabled in your Google Cloud Console.`, 'error');
+                    // If we see this, it means the request made it to Google, but the key is still restricted (even if you think it's not)
+                    displayResult(`API Error: REQUEST DENIED. This means the request made it to Google's server, but the API Key is still RESTRICTED in the Google Cloud Console. Check your API key restrictions again.`, 'error');
                     return;
                 }
                 if (data.status !== 'OK') {
