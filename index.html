@@ -97,17 +97,15 @@
 
     <script>
         // --- Configuration and Constants ---
-        // *** This is the new, unique key provided by the user ***
+        // NOTE ON API KEY: For a static front-end deployment like GitHub Pages, the key is exposed.
+        // It MUST be secured via Application/API restrictions in the Google Cloud Console.
         const API_KEY = "AIzaSyA-HPemyZUKc42MBLUbVD0JGuqffBpei94"; 
         const DESTINATION = "Whitechapel Road, London E1 1BB, UK";
         const MAX_EMERGENCY_MINUTES = 25;
         const BLUE_LIGHT_MULTIPLIER = 0.6; // 3/5
         
-        // This flag is no longer used, but kept for clarity if you decide to re-implement mock data
-        const MOCK_API_RESPONSE = false; 
-        
         // Max standard traffic duration (in seconds) that corresponds to 25 minutes blue light time:
-        const MAX_NORMAL_SECONDS = (MAX_EMERGENCY_MINUTES / BLUE_LIGHT_MULTIPLIER) * 60; // 2500 seconds
+        const MAX_NORMAL_SECONDS = (MAX_EMERGENCY_MINUTES / BLUE_LIGHT_MULTIPLIER) * 60; // 2500 seconds (approx 41.67 minutes)
         const MAX_NORMAL_MINUTES = (MAX_NORMAL_SECONDS / 60).toFixed(1);
 
         // --- DOM Elements ---
@@ -128,13 +126,16 @@
             detailsCard.innerHTML = (type === 'success' || type === 'failure') ? detailsHtml : '';
 
             statusMessage.className = 'text-center font-semibold text-lg py-2 px-4 rounded-lg';
-            detailsCard.classList.toggle('hidden', type === 'error');
+            detailsCard.classList.toggle('hidden', type === 'error' || type === 'initial');
+
+            // Remove previous color classes
+            statusMessage.classList.remove('bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800', 'bg-yellow-100', 'text-yellow-800');
 
             if (type === 'success') {
                 statusMessage.classList.add('bg-green-100', 'text-green-800');
             } else if (type === 'failure') {
                 statusMessage.classList.add('bg-red-100', 'text-red-800');
-            } else { // error
+            } else { // error or initial
                 statusMessage.classList.add('bg-yellow-100', 'text-yellow-800');
             }
         }
@@ -143,6 +144,7 @@
          * Main function to check the drive time using a single API call.
          */
         async function checkDriveTime() {
+            // 1. Postcode Input Cleanup and Validation
             const postcode = postcodeInput.value.trim().toUpperCase().replace(/\s/g, '');
 
             if (!postcode) {
@@ -154,26 +156,23 @@
             checkButton.disabled = true;
             loadingIndicator.classList.remove('hidden');
             statusMessage.textContent = 'Calculating real-time traffic...';
-            statusMessage.className = 'text-center text-gray-500 italic';
+            statusMessage.className = 'text-center text-gray-500 italic'; // Reset status style for loading
 
             try {
-                // 1. Construct API URL and Fetch Data
+                // 2. Construct API URL. 'mode: cors' is necessary for browser security in GitHub Pages.
                 const apiUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${postcode},UK&destinations=${DESTINATION}&key=${API_KEY}&mode=driving&departure_time=now&traffic_model=best_guess&units=metric`;
                 
-                // DEBUGGING AID: Log the exact URL being requested
-                console.log('API Request URL:', apiUrl);
-
-                const response = await fetch(apiUrl);
+                // 3. Fetch Data with explicit CORS mode
+                const response = await fetch(apiUrl, { mode: 'cors' });
 
                 if (!response.ok) {
                     throw new Error(`Network error: HTTP status ${response.status}`);
                 }
                 const data = await response.json();
 
-                // 2. Handle Top-Level API Errors
+                // 4. Handle Top-Level API Errors
                 if (data.status === 'REQUEST_DENIED') {
-                    // If we see this, it means the request made it to Google, but the key is still restricted (even if you think it's not)
-                    displayResult(`API Error: REQUEST DENIED. This means the request made it to Google's server, but the API Key is still RESTRICTED in the Google Cloud Console. Check your API key restrictions again.`, 'error');
+                    displayResult(`API Error: REQUEST DENIED. This means the key is either restricted or the Distance Matrix API is not ENABLED for this project in the Google Cloud Console.`, 'error');
                     return;
                 }
                 if (data.status !== 'OK') {
@@ -184,17 +183,17 @@
                 const element = data.rows[0].elements[0];
                 const originAddress = data.origin_addresses[0];
 
-                // 3. Handle Route/Element Errors
+                // 5. Handle Route/Element Errors
                 if (element.status !== 'OK' || !element.duration_in_traffic) {
                     let errorMessage = "Could not calculate a route.";
                     if (element.status === 'ZERO_RESULTS') {
-                        errorMessage = `No driving route found between ${originAddress} and the hospital.`;
+                        errorMessage = `No driving route found between ${originAddress} and the hospital. Please check the postcode.`;
                     }
                     displayResult(errorMessage, 'error');
                     return;
                 }
 
-                // 4. Successful Calculation and Display
+                // 6. Successful Calculation and Display
                 const durationInSeconds = element.duration_in_traffic.value;
                 const normalDurationText = element.duration_in_traffic.text;
                 const distanceText = element.distance.text;
@@ -224,7 +223,7 @@
 
             } catch (error) {
                 console.error('Fatal Connection Error:', error);
-                displayResult(`Connection Failed. A network or general API error occurred: ${error.message}`, 'error');
+                displayResult(`Connection Failed. A network or general API error occurred: ${error.message}. Please check your browser's console (F12) for more details.`, 'error');
             } finally {
                 // Reset UI state
                 checkButton.disabled = false;
