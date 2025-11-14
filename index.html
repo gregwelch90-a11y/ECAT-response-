@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    <title>ECAT Blue Light Response Checker</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styling for Inter font and general body aesthetics */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Custom box-shadow for a deeper 3D effect on the card */
+        .card-shadow {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), 0 0 0 8px rgba(255, 255, 255, 0.5);
+        }
+        /* Using a more vibrant red for primary action */
+        .bg-primary {
+            background-color: #e53e3e;
+        }
+        .hover\:bg-primary-dark:hover {
+            background-color: #c53030;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-lg bg-white p-8 md:p-10 rounded-xl shadow-2xl transition-all duration-300 card-shadow">
+
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-red-700 mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="inline-block w-8 h-8 mr-2 -mt-1 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                    <!-- Ambulance/Medical Icon -->
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                </svg>
+                ECAT Blue Light Response Checker
+            </h1>
+            <p class="text-gray-600 text-lg">Check if a postcode is within 25 minutes of The Royal London Hospital.</p>
+        </header>
+
+        <main>
+            <div class="mb-6">
+                <label for="postcodeInput" class="block text-sm font-medium text-gray-700 mb-2">
+                    Enter UK Postcode (e.g., E1 1BB)
+                </label>
+                <input
+                    type="text"
+                    id="postcodeInput"
+                    placeholder="Enter Postcode"
+                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 transition duration-150"
+                    aria-label="Postcode Input"
+                >
+            </div>
+
+            <button
+                id="checkButton"
+                class="w-full bg-red-600 text-white font-semibold py-3 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 transition duration-150 active:scale-95 disabled:bg-red-300"
+                onclick="checkDriveTime()"
+            >
+                Check Drive Time
+            </button>
+
+            <!-- Loading Indicator -->
+            <div id="loadingIndicator" class="hidden text-center mt-6">
+                <div class="animate-spin inline-block w-6 h-6 border-4 border-red-500 border-t-transparent rounded-full" role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
+                <p class="text-sm text-gray-500 mt-2">Calculating real-time traffic...</p>
+            </div>
+
+            <!-- Result Display Container -->
+            <div id="resultContainer" class="mt-8 pt-6 border-t border-gray-200">
+                <!-- Results will be displayed here -->
+                <p id="statusMessage" class="text-center text-gray-500 italic">Enter a postcode above to begin the check.</p>
+                <div id="detailsCard" class="hidden bg-gray-50 p-4 mt-4 rounded-lg border border-gray-100">
+                    <p class="text-sm text-gray-600 mb-2">
+                        <span class="font-bold">Destination:</span> The Royal London Hospital, E1 1BB, UK
+                    </p>
+                    <p class="text-sm text-gray-600">
+                        <span class="font-bold">Target Blue Light Time:</span> 25 minutes
+                    </p>
+                </div>
+            </div>
+        </main>
+
+        <!-- New Contact Footer -->
+        <footer class="mt-6 pt-4 border-t border-gray-200 text-center">
+            <p class="text-xs text-gray-500">
+                Any issues with this web app please contact lead paramedic and <a href="mailto:Gregory.welch@nhs.net" class="text-red-600 hover:text-red-700 font-medium">Gregory.welch@nhs.net</a>
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // --- Configuration and Constants ---
+        // !!! IMPORTANT: REPLACE THIS PLACEHOLDER WITH YOUR NEW, UNRESTRICTED API KEY !!!
+        const API_KEY = "AIzaSyA-HPemyZUKc42MBLUbVD0JGuqffBpei94"; 
+        const DESTINATION = "Whitechapel Road, London E1 1BB, UK";
+        const MAX_EMERGENCY_MINUTES = 25;
+        const BLUE_LIGHT_MULTIPLIER = 0.6; // 3/5
+        
+        // This flag is no longer used, but kept for clarity if you decide to re-implement mock data
+        const MOCK_API_RESPONSE = false; 
+        
+        // Max standard traffic duration (in seconds) that corresponds to 25 minutes blue light time:
+        const MAX_NORMAL_SECONDS = (MAX_EMERGENCY_MINUTES / BLUE_LIGHT_MULTIPLIER) * 60; // 2500 seconds
+        const MAX_NORMAL_MINUTES = (MAX_NORMAL_SECONDS / 60).toFixed(1);
+
+        // --- DOM Elements ---
+        const postcodeInput = document.getElementById('postcodeInput');
+        const checkButton = document.getElementById('checkButton');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const statusMessage = document.getElementById('statusMessage');
+        const detailsCard = document.getElementById('detailsCard');
+
+        /**
+         * Updates the UI with the final result, including status styling.
+         * @param {string} message - The main result message.
+         * @param {string} type - 'success', 'failure', or 'error'.
+         * @param {string} [detailsHtml=''] - Optional HTML for details card.
+         */
+        function displayResult(message, type, detailsHtml = '') {
+            statusMessage.textContent = message;
+            detailsCard.innerHTML = (type === 'success' || type === 'failure') ? detailsHtml : '';
+
+            statusMessage.className = 'text-center font-semibold text-lg py-2 px-4 rounded-lg';
+            detailsCard.classList.toggle('hidden', type === 'error');
+
+            if (type === 'success') {
+                statusMessage.classList.add('bg-green-100', 'text-green-800');
+            } else if (type === 'failure') {
+                statusMessage.classList.add('bg-red-100', 'text-red-800');
+            } else { // error
+                statusMessage.classList.add('bg-yellow-100', 'text-yellow-800');
+            }
+        }
+        
+        /**
+         * Main function to check the drive time using a single API call.
+         */
+        async function checkDriveTime() {
+            const postcode = postcodeInput.value.trim().toUpperCase().replace(/\s/g, '');
+
+            if (!postcode) {
+                displayResult('Please enter a postcode.', 'error');
+                return;
+            }
+
+            // Set UI to loading state
+            checkButton.disabled = true;
+            loadingIndicator.classList.remove('hidden');
+            statusMessage.textContent = 'Calculating real-time traffic...';
+            statusMessage.className = 'text-center text-gray-500 italic';
+
+            try {
+                // 1. Construct API URL and Fetch Data
+                const apiUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${postcode},UK&destinations=${DESTINATION}&key=${API_KEY}&mode=driving&departure_time=now&traffic_model=best_guess&units=metric`;
+                
+                // DEBUGGING AID: Log the exact URL being requested
+                console.log('API Request URL:', apiUrl);
+
+                const response = await fetch(apiUrl);
+
+                if (!response.ok) {
+                    throw new Error(`Network error: HTTP status ${response.status}`);
+                }
+                const data = await response.json();
+
+                // 2. Handle Top-Level API Errors
+                if (data.status === 'REQUEST_DENIED') {
+                    // This error is now the *most likely* error if the app still fails after key insertion.
+                    displayResult(`API Error: REQUEST DENIED. This usually means the API key is restricted to the wrong domain or the Distance Matrix API is not enabled in your Google Cloud Console.`, 'error');
+                    return;
+                }
+                if (data.status !== 'OK') {
+                    displayResult(`API Error: ${data.error_message || data.status}.`, 'error');
+                    return;
+                }
+
+                const element = data.rows[0].elements[0];
+                const originAddress = data.origin_addresses[0];
+
+                // 3. Handle Route/Element Errors
+                if (element.status !== 'OK' || !element.duration_in_traffic) {
+                    let errorMessage = "Could not calculate a route.";
+                    if (element.status === 'ZERO_RESULTS') {
+                        errorMessage = `No driving route found between ${originAddress} and the hospital.`;
+                    }
+                    displayResult(errorMessage, 'error');
+                    return;
+                }
+
+                // 4. Successful Calculation and Display
+                const durationInSeconds = element.duration_in_traffic.value;
+                const normalDurationText = element.duration_in_traffic.text;
+                const distanceText = element.distance.text;
+
+                const blueLightTimeSeconds = durationInSeconds * BLUE_LIGHT_MULTIPLIER;
+                const blueLightTimeMinutes = (blueLightTimeSeconds / 60).toFixed(1);
+
+                const isWithinLimit = (durationInSeconds <= MAX_NORMAL_SECONDS);
+                
+                const resultText = isWithinLimit 
+                    ? `YES! Estimated Blue Light Drive Time: ${blueLightTimeMinutes} minutes.`
+                    : `ECAT Team recommended to travel by aircraft as drive time estimated to be ${blueLightTimeMinutes} minutes.`;
+
+                const detailsHtml = `
+                    <p class="text-sm text-gray-600 mb-1"><span class="font-bold">Origin:</span> ${originAddress}</p>
+                    <p class="text-sm text-gray-600 mb-1"><span class="font-bold">Normal Real-Time Drive:</span> ${normalDurationText}</p>
+                    <p class="text-sm text-gray-600 mb-1"><span class="font-bold">Distance:</span> ${distanceText}</p>
+                    <div class="mt-4 p-2 rounded-lg ${isWithinLimit ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}">
+                        <p class="text-sm text-gray-700">
+                            <span class="font-bold ${isWithinLimit ? 'text-green-700' : 'text-red-700'}">Calculated Threshold:</span> 
+                            Standard traffic time must not exceed <span class="font-extrabold">${MAX_NORMAL_MINUTES} minutes</span> (for 25 mins BLT).
+                        </p>
+                    </div>
+                `;
+
+                displayResult(resultText, isWithinLimit ? 'success' : 'failure', detailsHtml);
+
+            } catch (error) {
+                console.error('Fatal Connection Error:', error);
+                displayResult(`Connection Failed. A network or general API error occurred: ${error.message}`, 'error');
+            } finally {
+                // Reset UI state
+                checkButton.disabled = false;
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        // Add event listener for Enter key on the input field
+        postcodeInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                checkDriveTime();
+            }
+        });
+        
+    </script>
+
+</body>
+</html>
